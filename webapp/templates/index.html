@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>загрузка</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="wrap">
+    <h1>загрузка</h1>
+
+    <div class="card">
+      <div class="row">
+        <button id="btnNew">новая сессия</button>
+        <div class="muted" id="status"></div>
+      </div>
+
+      <div class="row">
+        <label class="lbl">рун (xlsx)</label>
+        <input type="file" id="fileRun" accept=".xlsx">
+        <button id="btnUploadRun">загрузить</button>
+      </div>
+
+      <div class="row">
+        <label class="lbl">расписание (xlsx)</label>
+        <input type="file" id="fileSched" accept=".xlsx">
+        <button id="btnUploadSched">загрузить</button>
+      </div>
+
+      <div class="row">
+        <button id="btnBuild">построить черновик</button>
+        <a class="link" href="/unmatched">перейти к unmatched</a>
+        <a class="link" href="/download/timetable">скачать итог</a>
+      </div>
+
+      <pre class="log" id="log"></pre>
+    </div>
+  </div>
+
+  <script src="/static/index.js"></script>
+</body>
+</html>

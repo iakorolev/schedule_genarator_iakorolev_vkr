@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>unmatched</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <h1>unmatched — только ММиИИ</h1>
+      <div class="actions">
+        <a class="link" href="/">загрузка</a>
+        <button id="btnReload">обновить</button>
+        <button id="btnRebuild">пересобрать</button>
+        <a class="link" href="/download/timetable">скачать итог</a>
+        <a class="link" href="/download/teacher-loads">нагрузка</a>
+        <a class="link" href="/download/assignments">распределение</a>
+        <a class="link" href="/download/unmatched">unmatched</a>
+        <a class="link" href="/download/external-slots">внешние слоты</a>
+      </div>
+    </div>
+
+    <div class="muted" id="status"></div>
+
+    <div class="grid">
+      <table>
+        <thead>
+          <tr>
+            <th>день</th>
+            <th>пара</th>
+            <th>время</th>
+            <th>группа</th>
+            <th>disc_key</th>
+            <th>вид</th>
+            <th>ауд</th>
+            <th>кандидат</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <pre class="log" id="log"></pre>
+  </div>
+
+  <script src="/static/unmatched.js"></script>
+</body>
+</html>
