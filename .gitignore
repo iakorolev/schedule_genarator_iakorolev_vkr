@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local data / sessions
+webapp/data/sessions/
+webapp/data/current_session.json
+
+# Excel outputs
+*.xlsx
+*.xlsm
+*.xls
+
+# Archives / backups
+*.zip
+
+# Logs
+*.log
