@@ -1,6 +1,9 @@
+"""Модель состояния преподавателей: доступность, нагрузка и уже сделанные назначения."""
+
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Any
 
 import pandas as pd
 
@@ -11,7 +14,8 @@ SLOT_UNIT = 1.0
 KIND_UNIT = {"лек": 1.0, "сем": 1.0, "лаб": 1.0}
 
 
-def build_teacher_state(teacher_capacity: pd.DataFrame, locked_assignments: pd.DataFrame | None = None) -> dict:
+def build_teacher_state(teacher_capacity: pd.DataFrame, locked_assignments: pd.DataFrame | None = None) -> dict[str, Any]:
+    """Создаёт начальное состояние преподавателей по нагрузке и уже известным назначениям."""
     state = {
         "remaining_total": {},
         "remaining_by_kind": {},
@@ -47,12 +51,14 @@ def build_teacher_state(teacher_capacity: pd.DataFrame, locked_assignments: pd.D
 
 
 
-def slot_key(day: str, pair, time: str) -> tuple:
+def slot_key(day: str, pair: Any, time: str) -> tuple[str, int | None, str]:
+    """Формирует ключ временного слота по дню, паре и времени."""
     return (str(day), int(pair) if pd.notna(pair) else None, str(time))
 
 
 
 def _room_key(room: str) -> str:
+    """Нормализует аудиторию для сравнения и проверки потоковых лекций."""
     s = normalize_room(room or "").lower()
     if not s:
         return ""
@@ -64,7 +70,8 @@ def _room_key(room: str) -> str:
 
 
 
-def _stream_token(assignment) -> tuple:
+def _stream_token(assignment: Any) -> tuple[str, str, str]:
+    """Строит токен потокового события для учёта совместимых лекций."""
     disc = _txt(assignment.get("disc_key"))
     kind = _txt(assignment.get("Вид_занятия_норм") or assignment.get("kind_norm"))
     room = _room_key(_txt(assignment.get("Аудитория") or assignment.get("room")))
@@ -72,7 +79,8 @@ def _stream_token(assignment) -> tuple:
 
 
 
-def _assignment_meta(assignment) -> dict:
+def _assignment_meta(assignment: Any) -> dict[str, Any]:
+    """Преобразует назначение в компактную структуру для хранения в состоянии."""
     group = _txt(assignment.get("Учебная группа") or assignment.get("group"))
     gparts = extract_group_parts(group)
     return {
@@ -91,6 +99,7 @@ def _assignment_meta(assignment) -> dict:
 
 def _stream_compatible(existing: dict, incoming: dict) -> bool:
     # Одновременное ведение допускаем только для потоковых лекций.
+    """Проверяет, можно ли считать два назначения совместимыми внутри одного потока."""
     if existing.get("kind") != "лек" or incoming.get("kind") != "лек":
         return False
     if existing.get("disc") != incoming.get("disc"):
@@ -109,7 +118,8 @@ def _stream_compatible(existing: dict, incoming: dict) -> bool:
 
 
 
-def teacher_is_available(state: dict, teacher: str, day: str, pair, time: str, disc: str | None = None, kind: str | None = None, room: str | None = None, group: str | None = None) -> bool:
+def teacher_is_available(state: dict[str, Any], teacher: str, day: str, pair: Any, time: str, disc: str | None = None, kind: str | None = None, room: str | None = None, group: str | None = None) -> bool:
+    """Проверяет, свободен ли преподаватель в заданном временном слоте."""
     sk = slot_key(day, pair, time)
     existing = state["busy_slots"].get(teacher, [])
     same_slot = [m for m in existing if slot_key(m.get("day"), m.get("pair"), m.get("time")) == sk]
@@ -129,14 +139,16 @@ def teacher_is_available(state: dict, teacher: str, day: str, pair, time: str, d
 
 
 
-def teacher_remaining_capacity(state: dict, teacher: str, kind: str | None = None) -> float:
+def teacher_remaining_capacity(state: dict[str, Any], teacher: str, kind: str | None = None) -> float:
+    """Возвращает остаточную нагрузку преподавателя в целом или по виду занятий."""
     if kind:
         return float(state["remaining_by_kind"].get(teacher, {}).get(kind, 0.0) or 0.0)
     return float(state["remaining_total"].get(teacher, 0.0) or 0.0)
 
 
 
-def apply_assignment_to_state(state: dict, assignment) -> dict:
+def apply_assignment_to_state(state: dict[str, Any], assignment: Any) -> dict[str, Any]:
+    """Обновляет состояние преподавателя после нового назначения."""
     teacher = assignment.get("Преподаватель")
     if not teacher:
         return state

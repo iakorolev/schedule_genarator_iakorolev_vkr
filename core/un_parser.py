@@ -1,3 +1,5 @@
+"""Разбор РУН/УН и построение атомарной модели учебной нагрузки преподавателей."""
+
 from __future__ import annotations
 
 import math
@@ -9,11 +11,13 @@ from .normalize import _txt, extract_group_parts, normalize_disc, normalize_grou
 
 
 def _norm_sheet_name(s: str) -> str:
+    """Нормализует имя листа Excel-книги для поиска нужного листа."""
     return _txt(s).lower().replace("ё", "е").strip()
 
 
 
 def pick_un_sheet(excel_path: Path) -> str:
+    """Выбирает подходящий лист РУН/УН для чтения."""
     xls = pd.ExcelFile(excel_path)
     sheets = list(xls.sheet_names)
     norm_map = {_norm_sheet_name(x): x for x in sheets}
@@ -32,6 +36,7 @@ def pick_un_sheet(excel_path: Path) -> str:
 
 
 def expand_group_numbers(num_str: str) -> list[str]:
+    """Разворачивает строку с несколькими группами в список отдельных кодов."""
     s = _txt(num_str).replace(" ", "")
     if not s:
         return []
@@ -58,6 +63,7 @@ def expand_group_numbers(num_str: str) -> list[str]:
 
 
 def hours_to_units(hours: float) -> float:
+    """Преобразует часы нагрузки в условные единицы распределения."""
     try:
         h = float(hours or 0)
     except Exception:
@@ -67,6 +73,7 @@ def hours_to_units(hours: float) -> float:
 
 
 def _read_un_base(run_xlsx: Path) -> pd.DataFrame:
+    """Читает базовую таблицу РУН/УН без разворачивания по группам."""
     sheet = pick_un_sheet(run_xlsx)
     excel_data = pd.read_excel(run_xlsx, sheet_name=sheet, header=None)
 
@@ -77,7 +84,8 @@ def _read_un_base(run_xlsx: Path) -> pd.DataFrame:
     df = excel_data.iloc[5:].copy()
     df.columns = combined_headers
 
-    def find_col(pattern: str):
+    def find_col(pattern: str) -> str:
+        """Выполняет операцию `find col`."""
         for col in df.columns:
             if pattern in col:
                 return col
@@ -129,6 +137,7 @@ def _read_un_base(run_xlsx: Path) -> pd.DataFrame:
 
 
 def read_un(run_xlsx: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Возвращает базовую и развёрнутую таблицы РУН/УН."""
     un_raw = _read_un_base(run_xlsx)
     run_atoms = read_un_atoms(run_xlsx)
     un_expanded = run_atoms.rename(columns={"kind_norm": "Вид_работы_норм"}).copy()
@@ -137,6 +146,7 @@ def read_un(run_xlsx: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def read_un_atoms(run_xlsx: Path) -> pd.DataFrame:
+    """Преобразует РУН/УН в атомы нагрузки преподавателей."""
     un_raw = _read_un_base(run_xlsx)
     rows = []
 
@@ -212,6 +222,7 @@ def read_un_atoms(run_xlsx: Path) -> pd.DataFrame:
 
 
 def build_teacher_capacity(run_atoms: pd.DataFrame) -> pd.DataFrame:
+    """Строит сводную таблицу доступной нагрузки преподавателей."""
     if run_atoms is None or len(run_atoms) == 0:
         return pd.DataFrame(columns=["Преподаватель", "capacity_total_units", "remaining_total_units"])
 
@@ -239,6 +250,7 @@ def build_teacher_capacity(run_atoms: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_teacher_skills(run_atoms: pd.DataFrame) -> pd.DataFrame:
+    """Формирует сводку навыков преподавателя по дисциплинам и видам занятий."""
     if run_atoms is None or len(run_atoms) == 0:
         return pd.DataFrame(columns=["Преподаватель", "disc_key", "kind_norm", "skill_weight"])
 
@@ -252,6 +264,7 @@ def build_teacher_skills(run_atoms: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_teacher_group_links(run_atoms: pd.DataFrame) -> pd.DataFrame:
+    """Строит связи преподавателя с группами, дисциплинами и видами занятий."""
     if run_atoms is None or len(run_atoms) == 0:
         return pd.DataFrame(columns=["Преподаватель", "Учебная группа", "disc_key", "kind_norm", "hours_kind"])
     return run_atoms.groupby(["Преподаватель", "Учебная группа", "disc_key", "kind_norm"], as_index=False).agg(

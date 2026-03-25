@@ -1,3 +1,5 @@
+"""Подготовка кандидатов для выбора преподавателя в пользовательском интерфейсе."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -13,6 +15,7 @@ from .un_parser import build_teacher_capacity
 
 @dataclass
 class Slot:
+    """Описывает слот, для которого требуется подобрать преподавателя."""
     group: str
     disc_key: str
     kind: str
@@ -25,6 +28,7 @@ def build_candidates(
     top_n: int = 8,
     min_score: float = 0.20,
 ) -> list[dict[str, Any]]:
+    """Возвращает верхнюю часть списка кандидатов для одного слота в интерфейсе."""
     if un_expanded is None or len(un_expanded) == 0:
         return []
 

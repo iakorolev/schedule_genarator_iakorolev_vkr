@@ -1,3 +1,5 @@
+"""Разбор файла общего расписания и преобразование ячеек в атомарные слоты."""
+
 from __future__ import annotations
 
 import re
@@ -31,6 +33,7 @@ SEGMENT_START_RE = re.compile(
 
 
 def _clean_cell_text(raw: Any) -> str:
+    """Очищает содержимое ячейки расписания перед разбором."""
     s = clean_text(raw)
     s = s.replace("\n", " ")
     s = s.replace("%", " ")
@@ -40,6 +43,7 @@ def _clean_cell_text(raw: Any) -> str:
 
 
 def split_cell_into_blocks(text: str) -> list[str]:
+    """Разбивает сложную ячейку расписания на отдельные смысловые блоки."""
     s = _clean_cell_text(text)
     if not s:
         return []
@@ -101,6 +105,7 @@ def split_cell_into_blocks(text: str) -> list[str]:
 
 
 def _extract_subgroup(text: str) -> str:
+    """Извлекает обозначение подгруппы из текстового блока."""
     s = clean_text(text)
     m = SUBGROUP_RE.search(s)
     if m:
@@ -112,6 +117,7 @@ def _extract_subgroup(text: str) -> str:
 
 
 def parse_block(block: str) -> list[dict[str, Any]]:
+    """Разбирает один блок ячейки расписания в структурированную запись."""
     block = _clean_cell_text(block)
     if not block:
         return []
@@ -202,7 +208,8 @@ def parse_block(block: str) -> list[dict[str, Any]]:
 
 
 
-def parse_subject(raw):
+def parse_subject(raw: Any) -> dict[str, Any]:
+    """Возвращает краткое legacy-представление содержимого ячейки."""
     atoms = []
     for block in split_cell_into_blocks(raw):
         atoms.extend(parse_block(block))
@@ -218,6 +225,7 @@ def parse_subject(raw):
 
 
 def read_schedule_atoms(sched_xlsx: Path, sheet_name: str = "ФМиЕН") -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Читает файл расписания и возвращает сырые, нормализованные и атомарные таблицы."""
     xls = pd.ExcelFile(sched_xlsx)
     df = pd.read_excel(xls, sheet_name=sheet_name, header=None)
 
@@ -320,5 +328,6 @@ def read_schedule_atoms(sched_xlsx: Path, sheet_name: str = "ФМиЕН") -> tup
 
 
 def read_schedule(sched_xlsx: Path, sheet_name: str = "ФМиЕН") -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Возвращает только parsed- и normalized-версии расписания."""
     parsed_df, norm_df, _atoms_df = read_schedule_atoms(sched_xlsx, sheet_name=sheet_name)
     return parsed_df, norm_df

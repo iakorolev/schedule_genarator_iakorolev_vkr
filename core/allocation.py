@@ -1,6 +1,9 @@
+"""Эвристическое распределение преподавателей по неразобранным слотам расписания."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import pandas as pd
 
@@ -11,17 +14,20 @@ from .un_parser import build_teacher_group_links, build_teacher_skills
 
 @dataclass
 class CandidateScore:
+    """Хранит итоговую оценку кандидата и текстовое объяснение назначения."""
     teacher: str
     score: float
     reason: str
 
 
-def _slot_group_context(slot) -> dict[str, str]:
+def _slot_group_context(slot: pd.Series) -> dict[str, str]:
+    """Возвращает нормализованный контекст учебной группы для текущего слота."""
     group = _txt(slot.get("Учебная группа"))
     return extract_group_parts(group)
 
 
-def _state_family_bonus(state: dict, teacher: str, slot, disc: str, kind: str) -> tuple[float, list[str]]:
+def _state_family_bonus(state: dict[str, Any], teacher: str, slot: pd.Series, disc: str, kind: str) -> tuple[float, list[str]]:
+    """Рассчитывает бонус за ранее сделанные назначения в той же группе или направлении."""
     bonus = 0.0
     reasons: list[str] = []
     ctx = _slot_group_context(slot)
@@ -42,6 +48,7 @@ def _state_family_bonus(state: dict, teacher: str, slot, disc: str, kind: str) -
 
 
 def _prep_assigned_index(assignments: pd.DataFrame) -> tuple[dict, dict, dict, dict]:
+    """Строит индексы уже закреплённых назначений для повторного использования в скоринге."""
     disc_kind_teachers: dict[tuple[str, str], set[str]] = {}
     teacher_days: dict[tuple[str, str], set[str]] = {}
     family_disc_kind_teachers: dict[tuple[str, str, str], set[str]] = {}
@@ -69,6 +76,7 @@ def _prep_assigned_index(assignments: pd.DataFrame) -> tuple[dict, dict, dict, d
 
 
 def _related_kinds(kind: str) -> list[str]:
+    """Возвращает родственные виды занятий для fallback-поиска кандидатов."""
     if kind == "лаб":
         return ["сем"]
     if kind == "сем":
@@ -83,6 +91,7 @@ def build_slot_candidates(
     locked_assignments: pd.DataFrame | None = None,
     mappings: dict | None = None,
 ) -> pd.DataFrame:
+    """Формирует и оценивает список кандидатов для каждого нераспределённого слота."""
     if unmatched_slots is None or len(unmatched_slots) == 0:
         return pd.DataFrame(columns=["slot_id", "teacher", "score", "reason"])
     if run_atoms is None or len(run_atoms) == 0:
@@ -299,6 +308,7 @@ def build_slot_candidates(
 
 
 def _rule_matches_slot(when: dict, slot: pd.Series) -> bool:
+    """Проверяет, подходит ли пользовательское правило к конкретному слоту."""
     group = _txt(slot.get("Учебная группа"))
     disc = _txt(slot.get("disc_key"))
     kind = _txt(slot.get("Вид_занятия_норм"))
@@ -317,6 +327,7 @@ def allocate_unmatched_greedy(
     candidates: pd.DataFrame,
     teacher_state: dict,
 ) -> pd.DataFrame:
+    """Жадно распределяет оставшиеся слоты по лучшим допустимым кандидатам."""
     if unmatched_slots is None or len(unmatched_slots) == 0:
         return pd.DataFrame(columns=["slot_id", "Преподаватель", "score", "reason", "assign_type"])
     if candidates is None or len(candidates) == 0:
@@ -373,6 +384,7 @@ def allocate_unmatched_greedy(
 
 
 def merge_locked_and_allocated(base_slots: pd.DataFrame, locked: pd.DataFrame, allocated: pd.DataFrame) -> pd.DataFrame:
+    """Объединяет базовые слоты с жёсткими и автоматически найденными назначениями."""
     df = base_slots.copy()
     if "Преподаватель" not in df.columns:
         df["Преподаватель"] = None

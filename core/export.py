@@ -1,9 +1,12 @@
+"""Экспорт преподавательского расписания и диагностических таблиц в Excel-формат."""
+
 import pandas as pd
 
 from .normalize import _txt, normalize_day, normalize_time
 
 
 def make_cell_text(group: pd.DataFrame) -> str:
+    """Собирает текст одной ячейки преподавательского расписания из нескольких записей."""
     rows = []
     for _, r in group.iterrows():
         disc = _txt(r.get("Дисциплина_out"))
@@ -30,6 +33,7 @@ def make_cell_text(group: pd.DataFrame) -> str:
 
 
 def build_teacher_timetable(schedule_with_teachers: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Строит pivot-таблицу преподавательского расписания и список конфликтов."""
     df = schedule_with_teachers.copy()
     df["День недели"] = df["День недели"].apply(normalize_day)
     df["Время"] = df["Время"].apply(normalize_time)

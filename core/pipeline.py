@@ -1,3 +1,5 @@
+"""Основной конвейер построения кафедрального преподавательского расписания."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,10 +19,12 @@ from .normalize import _txt, best_disc_match, teacher_lastname, extract_group_pa
 
 
 def _split_hint_names(value: str) -> list[str]:
+    """Разделяет строку teacher hint на отдельные варианты имён."""
     return [x.strip() for x in str(_txt(value)).split("/") if x and str(x).strip()]
 
 
 def _infer_hint_teacher_atoms(schedule_atoms: pd.DataFrame, run_atoms: pd.DataFrame) -> pd.DataFrame:
+    """Строит дополнительные атомы нагрузки по teacher hints из расписания."""
     if schedule_atoms is None or len(schedule_atoms) == 0:
         return pd.DataFrame()
     teacher_lastnames = set(_txt(x) for x in run_atoms.get("teacher_lastname", []) if _txt(x)) if run_atoms is not None and len(run_atoms) > 0 else set()
@@ -89,6 +93,7 @@ def _infer_hint_teacher_atoms(schedule_atoms: pd.DataFrame, run_atoms: pd.DataFr
 
 
 def _is_slot_departmental(slot: pd.Series, run_atoms: pd.DataFrame, mappings: list[dict] | None = None) -> tuple[bool, str]:
+    """Определяет, относится ли слот к кафедральной задаче."""
     disc = _txt(slot.get("disc_key"))
     kind = _txt(slot.get("Вид_занятия_норм"))
     teacher_hint = teacher_lastname(slot.get("teacher_hint"))
@@ -123,6 +128,7 @@ def _is_slot_departmental(slot: pd.Series, run_atoms: pd.DataFrame, mappings: li
 
 
 def _filter_department_slots(sched_norm: pd.DataFrame, run_atoms: pd.DataFrame, mappings: list[dict] | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Разделяет слоты на кафедральные и внешние."""
     if sched_norm is None or len(sched_norm) == 0:
         empty = sched_norm.copy()
         return empty, empty
@@ -140,7 +146,8 @@ def _filter_department_slots(sched_norm: pd.DataFrame, run_atoms: pd.DataFrame, 
     return departmental, external
 
 
-def _safe_to_excel(df: pd.DataFrame, path: Path):
+def _safe_to_excel(df: pd.DataFrame, path: Path) -> None:
+    """Безопасно сохраняет DataFrame в Excel-файл."""
     if df is None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,6 +156,7 @@ def _safe_to_excel(df: pd.DataFrame, path: Path):
 
 
 def build_timetable_bundle(run_path: Path, sched_path: Path, out_dir: Path, mappings_path: Path) -> dict:
+    """Выполняет полный конвейер построения преподавательского расписания."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 

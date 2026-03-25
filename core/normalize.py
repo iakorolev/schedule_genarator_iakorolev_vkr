@@ -1,3 +1,5 @@
+"""Нормализация текстовых сущностей: дней, времени, дисциплин, групп и видов занятий."""
+
 import json
 import re
 from functools import lru_cache
@@ -11,13 +13,15 @@ BASE_DIR = Path(__file__).resolve().parent
 CONFIG_DIR = BASE_DIR / "config"
 
 
-def _txt(x) -> str:
-    if pd.isna(x):
+def _txt(value: Any) -> str:
+    """Безопасно приводит значение к строке без NaN и лишних пробелов."""
+    if pd.isna(value):
         return ""
-    return str(x).strip()
+    return str(value).strip()
 
 
 def clean_text(value: Any) -> str:
+    """Очищает строку от нестандартных пробелов и выравнивает форматирование."""
     s = _txt(value)
     if not s:
         return ""
@@ -71,6 +75,7 @@ DISC_ALIASES_DEFAULT = {
 
 @lru_cache(maxsize=1)
 def kind_aliases() -> dict[str, str]:
+    """Возвращает словарь алиасов для видов занятий."""
     path = CONFIG_DIR / "kind_aliases.json"
     if path.exists():
         try:
@@ -85,6 +90,7 @@ def kind_aliases() -> dict[str, str]:
 
 @lru_cache(maxsize=1)
 def disc_aliases() -> dict[str, str]:
+    """Возвращает словарь алиасов для дисциплин."""
     path = CONFIG_DIR / "disc_aliases.json"
     if path.exists():
         try:
@@ -98,6 +104,7 @@ def disc_aliases() -> dict[str, str]:
 
 
 def normalize_day(day: str) -> str:
+    """Нормализует обозначение дня недели."""
     s = clean_text(day).upper()
     for k, v in DAY_ALIASES.items():
         s = s.replace(k, v)
@@ -108,6 +115,7 @@ TIME_RE = re.compile(r"(\d{1,2})[\.:](\d{2})\s*-\s*(\d{1,2})[\.:](\d{2})")
 
 
 def normalize_time(t: str) -> str:
+    """Нормализует строковое представление времени пары."""
     s = clean_text(t).replace(",", ".")
     m = TIME_RE.search(s)
     if m:
@@ -126,6 +134,7 @@ ROOM_PATTERNS = [
 
 
 def normalize_room(room: str) -> str:
+    """Нормализует обозначение аудитории или дистанционного формата."""
     s = clean_text(room)
     s = s.replace(" ;", ";").replace("; ", "; ")
     s = s.replace("  ", " ")
@@ -133,6 +142,7 @@ def normalize_room(room: str) -> str:
 
 
 def normalize_group(raw: str) -> str:
+    """Нормализует обозначение учебной группы."""
     s = clean_text(raw)
     s = re.sub(r"\s*-\s*", "-", s)
     s = re.sub(r"\s+", "", s)
@@ -140,6 +150,7 @@ def normalize_group(raw: str) -> str:
 
 
 def extract_group_parts(group: str) -> dict[str, str]:
+    """Извлекает составные части кода учебной группы."""
     g = normalize_group(group)
     m = re.match(r"(?P<prefix>[A-Za-zА-Яа-яЁё]+(?:бд|мд|зд)?)-(?P<num>\d+)-(?P<year>\d+)$", g)
     if not m:
@@ -165,10 +176,12 @@ def extract_group_parts(group: str) -> dict[str, str]:
 
 
 def group_family_key(group: str) -> str:
+    """Возвращает семейный ключ группы без номера подгруппы."""
     return extract_group_parts(group).get("family_key", "")
 
 
 def _normalize_disc_base(s: str) -> str:
+    """Выполняет базовую нормализацию названия дисциплины."""
     s = clean_text(s).lower().replace("ё", "е")
     if not s:
         return ""
@@ -183,12 +196,14 @@ def _normalize_disc_base(s: str) -> str:
 
 
 def normalize_disc(s: str) -> str:
+    """Возвращает нормализованный ключ дисциплины."""
     s = _normalize_disc_base(s)
     aliases = disc_aliases()
     return aliases.get(s, s)
 
 
 def disc_tokens(s: str) -> set[str]:
+    """Разбивает дисциплину на токены для нестрогого сравнения."""
     s = normalize_disc(s)
     if not s:
         return set()
@@ -199,6 +214,7 @@ def disc_tokens(s: str) -> set[str]:
 
 
 def jaccard(a: set[str], b: set[str]) -> float:
+    """Вычисляет коэффициент Жаккара для двух наборов токенов."""
     if not a or not b:
         return 0.0
     inter = len(a & b)
@@ -207,6 +223,7 @@ def jaccard(a: set[str], b: set[str]) -> float:
 
 
 def best_disc_match(target_disc: str, candidates: list[str]) -> tuple[str | None, float]:
+    """Находит лучшее совпадение дисциплины в списке кандидатов."""
     ta = disc_tokens(target_disc)
     if not ta:
         return None, 0.0
@@ -221,6 +238,7 @@ def best_disc_match(target_disc: str, candidates: list[str]) -> tuple[str | None
 
 
 def normalize_kind(value: str, source: str | None = None) -> str | None:
+    """Нормализует вид занятия с опорой на словарь алиасов."""
     s = clean_text(value).lower().replace(".", " ")
     s = re.sub(r"\s+", " ", s).strip()
     if not s:
@@ -238,15 +256,18 @@ def normalize_kind(value: str, source: str | None = None) -> str | None:
     return None
 
 
-def normalize_kind_un(kind: str):
+def normalize_kind_un(kind: str) -> str | None:
+    """Нормализует вид работы из файла РУН/УН."""
     return normalize_kind(kind, source="run")
 
 
-def normalize_kind_sched(kind: str):
+def normalize_kind_sched(kind: str) -> str | None:
+    """Нормализует вид занятия из файла общего расписания."""
     return normalize_kind(kind, source="sched")
 
 
 def split_multi_kinds(kind_raw: str) -> list[str]:
+    """Разделяет комбинированный вид занятия на отдельные значения."""
     s = clean_text(kind_raw).lower()
     if not s:
         return []
@@ -264,6 +285,7 @@ def split_multi_kinds(kind_raw: str) -> list[str]:
 
 
 def find_rooms(text: str) -> list[str]:
+    """Извлекает из строки возможные обозначения аудиторий."""
     s = clean_text(text)
     found: list[str] = []
     for pat in ROOM_PATTERNS:
@@ -278,10 +300,12 @@ TEACHER_RE = re.compile(r"(?:доц\.|проф\.|ст\.преп\.|асс\.)?\s*[
 
 
 def looks_like_teacher(text: str) -> bool:
+    """Проверяет, похоже ли значение на ФИО преподавателя."""
     return bool(TEACHER_RE.search(clean_text(text)))
 
 
 def extract_teacher_hints(text: str) -> list[str]:
+    """Извлекает teacher hints из текстового блока расписания."""
     s = clean_text(text)
     out = []
     for m in TEACHER_RE.finditer(s):
@@ -293,6 +317,7 @@ def extract_teacher_hints(text: str) -> list[str]:
 
 
 def teacher_lastname(name: str) -> str:
+    """Выделяет фамилию преподавателя для сопоставления."""
     s = clean_text(name)
     if not s:
         return ""

@@ -1,5 +1,8 @@
+"""Flask-приложение с маршрутами загрузки файлов, сборки черновика и скачивания результатов."""
+
 import os
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from flask import Flask, jsonify, request, render_template, send_file
@@ -21,10 +24,12 @@ MAPPINGS_PATH = DATA / "mappings.json"
 
 
 def _session_dir() -> Path | None:
+    """Возвращает путь к текущей активной сессии web-приложения."""
     return get_current(DATA)
 
 
-def _require_session():
+def _require_session() -> tuple[Path | None, Any | None]:
+    """Проверяет наличие активной сессии и готовит ответ об ошибке при её отсутствии."""
     sdir = _session_dir()
     if sdir is None:
         return None, (jsonify({"error": "no session, upload files first"}), 400)
@@ -32,19 +37,22 @@ def _require_session():
 
 
 @app.get("/")
-def index():
+def index() -> Any:
+    """Отображает стартовую страницу web-приложения."""
     return render_template("index.html")
 
 
 @app.post("/api/session/new")
-def api_session_new():
+def api_session_new() -> Any:
+    """Создаёт новую пользовательскую сессию и делает её текущей."""
     sdir = create_session(DATA)
     set_current(DATA, sdir)
     return jsonify({"ok": True, "session": str(sdir)})
 
 
 @app.post("/api/upload")
-def api_upload():
+def api_upload() -> Any:
+    """Принимает и сохраняет загруженный входной файл."""
     sdir, err = _require_session()
     if err:
         return err
@@ -64,7 +72,8 @@ def api_upload():
 
 
 @app.get("/api/session/status")
-def api_session_status():
+def api_session_status() -> Any:
+    """Возвращает сводную информацию о состоянии текущей сессии."""
     sdir = _session_dir()
     if sdir is None:
         return jsonify({"has_session": False})
@@ -83,7 +92,8 @@ def api_session_status():
 
 
 @app.post("/api/build_draft")
-def api_build_draft():
+def api_build_draft() -> Any:
+    """Запускает построение черновика преподавательского расписания."""
     sdir, err = _require_session()
     if err:
         return err
@@ -109,12 +119,14 @@ def api_build_draft():
 
 
 @app.get("/unmatched")
-def unmatched_page():
+def unmatched_page() -> Any:
+    """Открывает страницу с нераспределёнными слотами."""
     return render_template("unmatched.html")
 
 
 @app.get("/api/unmatched")
-def api_unmatched():
+def api_unmatched() -> Any:
+    """Возвращает список нераспределённых слотов в JSON-формате."""
     sdir, err = _require_session()
     if err:
         return err
@@ -141,7 +153,8 @@ def api_unmatched():
 
 
 @app.get("/api/candidates")
-def api_candidates():
+def api_candidates() -> Any:
+    """Возвращает список кандидатов для выбранного проблемного слота."""
     sdir, err = _require_session()
     if err:
         return err
@@ -189,7 +202,8 @@ def api_candidates():
 
 
 @app.post("/api/mapping")
-def api_mapping():
+def api_mapping() -> Any:
+    """Сохраняет ручное правило выбора преподавателя."""
     data = request.get_json(silent=True) or {}
     slot = data.get("slot", {})
     teacher = (data.get("teacher") or "").strip()
@@ -213,12 +227,14 @@ def api_mapping():
 
 
 @app.get("/api/mappings")
-def api_mappings():
+def api_mappings() -> Any:
+    """Возвращает текущий набор пользовательских правил."""
     return jsonify(load_mappings(MAPPINGS_PATH))
 
 
 @app.post("/api/rebuild")
-def api_rebuild():
+def api_rebuild() -> Any:
+    """Пересобирает расписание с учётом пользовательских правил."""
     sdir, err = _require_session()
     if err:
         return err
@@ -243,7 +259,8 @@ def api_rebuild():
 
 
 @app.get("/download/timetable")
-def download_timetable():
+def download_timetable() -> Any:
+    """Отдаёт итоговое преподавательское расписание для скачивания."""
     sdir, err = _require_session()
     if err:
         return err
@@ -255,7 +272,8 @@ def download_timetable():
 
 
 @app.get("/download/unmatched")
-def download_unmatched():
+def download_unmatched() -> Any:
+    """Отдаёт файл с нераспределёнными слотами."""
     sdir, err = _require_session()
     if err:
         return err
@@ -267,7 +285,8 @@ def download_unmatched():
 
 
 @app.get("/download/teacher-loads")
-def download_teacher_loads():
+def download_teacher_loads() -> Any:
+    """Отдаёт файл со сводкой по нагрузке преподавателей."""
     sdir, err = _require_session()
     if err:
         return err
@@ -279,7 +298,8 @@ def download_teacher_loads():
 
 
 @app.get("/download/external-slots")
-def download_external_slots():
+def download_external_slots() -> Any:
+    """Отдаёт файл с исключёнными внешними слотами."""
     sdir, err = _require_session()
     if err:
         return err
@@ -291,7 +311,8 @@ def download_external_slots():
 
 
 @app.get("/download/assignments")
-def download_assignments():
+def download_assignments() -> Any:
+    """Отдаёт файл со всеми назначениями преподавателей."""
     sdir, err = _require_session()
     if err:
         return err

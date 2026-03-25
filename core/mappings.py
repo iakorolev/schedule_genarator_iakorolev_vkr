@@ -1,3 +1,5 @@
+"""Загрузка, сохранение и применение пользовательских правил назначения преподавателей."""
+
 import json
 from pathlib import Path
 from typing import Any
@@ -10,6 +12,7 @@ VALID_MODES = {"force_teacher", "lock_assignment", "prefer_teacher", "ban_teache
 
 
 def load_mappings(path: Path) -> dict:
+    """Загружает пользовательские правила из JSON-файла."""
     if not path.exists():
         return {"rules": []}
     try:
@@ -29,6 +32,7 @@ def load_mappings(path: Path) -> dict:
 
 
 def save_mappings(path: Path, data: dict) -> None:
+    """Сохраняет правила назначения в JSON-файл."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     with tmp.open("w", encoding="utf-8") as f:
@@ -38,6 +42,7 @@ def save_mappings(path: Path, data: dict) -> None:
 
 
 def add_rule(path: Path, when: dict, assign: dict, mode: str = "force_teacher") -> dict:
+    """Добавляет или заменяет правило назначения преподавателя."""
     data = load_mappings(path)
 
     rule = {"when": dict(when), "assign": dict(assign), "mode": mode}
@@ -54,6 +59,7 @@ def add_rule(path: Path, when: dict, assign: dict, mode: str = "force_teacher") 
 
 
 def apply_mappings(merged: pd.DataFrame, mappings: dict, override: bool = False) -> pd.DataFrame:
+    """Применяет правила к таблице слотов и проставляет ручные назначения."""
     df = merged.copy()
 
     if "rules" not in mappings or not isinstance(mappings["rules"], list):
@@ -114,6 +120,7 @@ def apply_mappings(merged: pd.DataFrame, mappings: dict, override: bool = False)
 
 
 def _match_mask(df: pd.DataFrame, when: dict) -> pd.Series:
+    """Строит булеву маску строк, соответствующих условию правила."""
     mask = pd.Series(True, index=df.index)
     if when.get("group"):
         mask &= df["_g"].eq(when["group"])
@@ -126,6 +133,7 @@ def _match_mask(df: pd.DataFrame, when: dict) -> pd.Series:
 
 
 def _normalize_rule(rule: dict) -> None:
+    """Нормализует структуру одного пользовательского правила."""
     when = rule.get("when", {})
     assign = rule.get("assign", {})
 
@@ -155,6 +163,7 @@ def _normalize_rule(rule: dict) -> None:
 
 
 def _clean(x: Any) -> str | None:
+    """Приводит значение к аккуратной строке или None."""
     if x is None:
         return None
     s = str(x).strip()
@@ -163,4 +172,5 @@ def _clean(x: Any) -> str | None:
 
 
 def _same_rule(a: dict, b: dict) -> bool:
+    """Сравнивает два правила на полное совпадение."""
     return (a.get("when") == b.get("when")) and (a.get("assign") == b.get("assign")) and (a.get("mode") == b.get("mode"))

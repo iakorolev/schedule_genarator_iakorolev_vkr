@@ -1,3 +1,5 @@
+"""Поиск точных совпадений и вспомогательные операции с результатами сопоставления."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -7,6 +9,7 @@ from .normalize import _txt, best_disc_match, teacher_lastname
 
 
 def dedup_un_for_merge(un_expanded: pd.DataFrame) -> pd.DataFrame:
+    """Удаляет дубли из таблицы нагрузки перед объединением с расписанием."""
     u = un_expanded.copy()
     if len(u) == 0:
         return u
@@ -27,6 +30,7 @@ def dedup_un_for_merge(un_expanded: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_exact_candidates(schedule_atoms: pd.DataFrame, run_atoms: pd.DataFrame) -> pd.DataFrame:
+    """Строит кандидатов по точным совпадениям группы, дисциплины и вида занятия."""
     if schedule_atoms is None or len(schedule_atoms) == 0 or run_atoms is None or len(run_atoms) == 0:
         return pd.DataFrame(columns=["slot_id", "Преподаватель", "score", "reason"])
 
@@ -50,6 +54,7 @@ def build_exact_candidates(schedule_atoms: pd.DataFrame, run_atoms: pd.DataFrame
 
 
 def lock_teacher_hints(schedule_atoms: pd.DataFrame, run_atoms: pd.DataFrame) -> pd.DataFrame:
+    """Фиксирует назначения по однозначным teacher hints из расписания."""
     if schedule_atoms is None or len(schedule_atoms) == 0:
         return pd.DataFrame(columns=["slot_id", "Преподаватель", "assign_type", "confidence", "reason"])
     s = schedule_atoms.copy()
@@ -107,6 +112,7 @@ def lock_teacher_hints(schedule_atoms: pd.DataFrame, run_atoms: pd.DataFrame) ->
 
 
 def select_locked_exact_matches(schedule_atoms: pd.DataFrame, run_atoms: pd.DataFrame) -> pd.DataFrame:
+    """Выбирает слоты, для которых найден ровно один точный кандидат."""
     cand = build_exact_candidates(schedule_atoms, run_atoms)
     if len(cand) == 0:
         return pd.DataFrame(columns=["slot_id", "Преподаватель", "assign_type", "confidence", "reason", "score"])
@@ -121,7 +127,8 @@ def select_locked_exact_matches(schedule_atoms: pd.DataFrame, run_atoms: pd.Data
 
 
 
-def fuzzy_fill_unmatched(merged: pd.DataFrame, un_dedup: pd.DataFrame, threshold_ok: float = 0.55):
+def fuzzy_fill_unmatched(merged: pd.DataFrame, un_dedup: pd.DataFrame, threshold_ok: float = 0.55) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Пытается заполнить оставшиеся слоты по нестрогому совпадению дисциплины."""
     lowconf_rows = []
 
     bucket = {}
@@ -177,7 +184,8 @@ def fuzzy_fill_unmatched(merged: pd.DataFrame, un_dedup: pd.DataFrame, threshold
 
 
 
-def merge_schedule_with_teachers(sched_norm: pd.DataFrame, un_expanded: pd.DataFrame):
+def merge_schedule_with_teachers(sched_norm: pd.DataFrame, un_expanded: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Объединяет расписание и нагрузку в legacy-формате для сравнения."""
     un_dedup = dedup_un_for_merge(un_expanded)
     kind_col = "kind_norm" if "kind_norm" in un_dedup.columns else "Вид_работы_норм"
 
