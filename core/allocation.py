@@ -350,7 +350,8 @@ def allocate_unmatched_greedy(
             picked["score"] = effective_score
             if extra_reasons:
                 tail = " | ".join(dict.fromkeys(extra_reasons))
-                picked["reason"] = f"{cand.get("reason", "")} | {tail}" if cand.get("reason") else tail
+                prev_reason = cand.get("reason", "")
+                picked["reason"] = f"{prev_reason} | {tail}" if prev_reason else tail
             break
 
         # Если уверенного и допустимого кандидата нет, лучше оставить слот unmatched,
