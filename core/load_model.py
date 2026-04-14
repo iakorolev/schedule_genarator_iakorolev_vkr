@@ -7,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from .normalize import _txt, extract_group_parts, normalize_room
+from .normalize import _txt, extract_group_parts, normalize_room, normalize_week_type
 
 
 SLOT_UNIT = 1.0
@@ -17,16 +17,32 @@ KIND_UNIT = {"лек": 1.0, "сем": 1.0, "лаб": 1.0}
 def build_teacher_state(teacher_capacity: pd.DataFrame, locked_assignments: pd.DataFrame | None = None) -> dict[str, Any]:
     """Создаёт начальное состояние преподавателей по нагрузке и уже известным назначениям."""
     state = {
+        "capacity_total": {},
+        "capacity_by_kind": {},
         "remaining_total": {},
         "remaining_by_kind": {},
         "busy_slots": defaultdict(list),  # teacher -> list[assignment_meta]
         "charged_streams": defaultdict(set),  # teacher -> set[event_key]
         "assigned_disc": defaultdict(set),
         "assigned_disc_by_day": defaultdict(lambda: defaultdict(set)),
+        "assigned_family_by_day": defaultdict(lambda: defaultdict(set)),
+        "assigned_prefix_year_by_day": defaultdict(lambda: defaultdict(set)),
         "assigned_disc_kind": defaultdict(set),
+        "assigned_group_disc_kind": defaultdict(set),
         "assigned_family_disc_kind": defaultdict(set),
         "assigned_prefix_year_disc_kind": defaultdict(set),
         "assigned_count": defaultdict(int),
+        "present_days": defaultdict(set),
+        "assigned_slots_by_day": defaultdict(lambda: defaultdict(set)),
+        "trusted_present_days": defaultdict(set),
+        "trusted_assigned_slots_by_day": defaultdict(lambda: defaultdict(set)),
+        "trusted_assigned_disc_by_day": defaultdict(lambda: defaultdict(set)),
+        "trusted_assigned_family_by_day": defaultdict(lambda: defaultdict(set)),
+        "trusted_assigned_prefix_year_by_day": defaultdict(lambda: defaultdict(set)),
+        "trusted_assigned_disc_kind": defaultdict(set),
+        "trusted_assigned_group_disc_kind": defaultdict(set),
+        "trusted_assigned_family_disc_kind": defaultdict(set),
+        "trusted_assigned_prefix_year_disc_kind": defaultdict(set),
     }
 
     if teacher_capacity is not None and len(teacher_capacity) > 0:
@@ -34,12 +50,16 @@ def build_teacher_state(teacher_capacity: pd.DataFrame, locked_assignments: pd.D
             t = r.get("Преподаватель")
             if not t:
                 continue
-            state["remaining_total"][t] = float(r.get("capacity_total_units", 0) or 0)
-            state["remaining_by_kind"][t] = {
+            total_units = float(r.get("capacity_total_units", 0) or 0)
+            by_kind = {
                 "лек": float(r.get("capacity_лек_units", 0) or 0),
                 "сем": float(r.get("capacity_сем_units", 0) or 0),
                 "лаб": float(r.get("capacity_лаб_units", 0) or 0),
             }
+            state["capacity_total"][t] = total_units
+            state["capacity_by_kind"][t] = by_kind.copy()
+            state["remaining_total"][t] = total_units
+            state["remaining_by_kind"][t] = by_kind.copy()
 
     if locked_assignments is not None and len(locked_assignments) > 0:
         for _, r in locked_assignments.iterrows():
@@ -51,9 +71,9 @@ def build_teacher_state(teacher_capacity: pd.DataFrame, locked_assignments: pd.D
 
 
 
-def slot_key(day: str, pair: Any, time: str) -> tuple[str, int | None, str]:
-    """Формирует ключ временного слота по дню, паре и времени."""
-    return (str(day), int(pair) if pd.notna(pair) else None, str(time))
+def slot_key(day: str, pair: Any, time: str, week_type: str | None = None) -> tuple[str, int | None, str, str]:
+    """Формирует ключ временного слота по дню, паре, времени и типу недели."""
+    return (str(day), int(pair) if pd.notna(pair) else None, str(time), str(week_type or ""))
 
 
 
@@ -87,6 +107,7 @@ def _assignment_meta(assignment: Any) -> dict[str, Any]:
         "day": _txt(assignment.get("День недели")),
         "pair": assignment.get("Пара"),
         "time": _txt(assignment.get("Время")),
+        "week_type": normalize_week_type(assignment.get("week_type")),
         "disc": _txt(assignment.get("disc_key")),
         "kind": _txt(assignment.get("Вид_занятия_норм") or assignment.get("kind_norm")),
         "room": _room_key(_txt(assignment.get("Аудитория") or assignment.get("room"))),
@@ -118,11 +139,25 @@ def _stream_compatible(existing: dict, incoming: dict) -> bool:
 
 
 
-def teacher_is_available(state: dict[str, Any], teacher: str, day: str, pair: Any, time: str, disc: str | None = None, kind: str | None = None, room: str | None = None, group: str | None = None) -> bool:
+def _weeks_overlap(existing_week: str, incoming_week: str) -> bool:
+    """Проверяет пересечение типов недели: пустое значение считается общим слотом."""
+    existing_week = normalize_week_type(existing_week)
+    incoming_week = normalize_week_type(incoming_week)
+    if not existing_week or not incoming_week:
+        return True
+    return existing_week == incoming_week
+
+
+
+def teacher_is_available(state: dict[str, Any], teacher: str, day: str, pair: Any, time: str, disc: str | None = None, kind: str | None = None, room: str | None = None, group: str | None = None, week_type: str | None = None) -> bool:
     """Проверяет, свободен ли преподаватель в заданном временном слоте."""
-    sk = slot_key(day, pair, time)
+    sk = slot_key(day, pair, time, week_type)
     existing = state["busy_slots"].get(teacher, [])
-    same_slot = [m for m in existing if slot_key(m.get("day"), m.get("pair"), m.get("time")) == sk]
+    same_slot = [
+        m for m in existing
+        if slot_key(m.get("day"), m.get("pair"), m.get("time"), m.get("week_type"))[:3] == sk[:3]
+        and _weeks_overlap(_txt(m.get("week_type")), _txt(week_type))
+    ]
     if not same_slot:
         return True
     incoming = {
@@ -133,6 +168,7 @@ def teacher_is_available(state: dict[str, Any], teacher: str, day: str, pair: An
         "kind": _txt(kind),
         "room": _room_key(_txt(room)),
         "group": _txt(group),
+        "week_type": normalize_week_type(week_type),
         **extract_group_parts(_txt(group)),
     }
     return all(_stream_compatible(m, incoming) for m in same_slot)
@@ -159,20 +195,49 @@ def apply_assignment_to_state(state: dict[str, Any], assignment: Any) -> dict[st
     day = meta["day"]
     pair = meta["pair"]
     time = meta["time"]
+    group = meta["group"]
     family_key = meta["family_key"]
     prefix_year = meta["prefix_year"]
 
-    sk = slot_key(day, pair, time)
+    sk = slot_key(day, pair, time, meta.get("week_type"))
     state["busy_slots"][teacher].append(meta)
+    trust_for_propagation = bool(assignment.get("_trusted_propagation", True))
+
+    if day:
+        state["present_days"][teacher].add(day)
+        state["assigned_slots_by_day"][teacher][day].add(sk)
+        if trust_for_propagation:
+            state["trusted_present_days"][teacher].add(day)
+            state["trusted_assigned_slots_by_day"][teacher][day].add(sk)
     if disc:
         state["assigned_disc"][teacher].add(disc)
         state["assigned_disc_by_day"][teacher][str(day)].add(disc)
+        if family_key:
+            state["assigned_family_by_day"][teacher][str(day)].add(family_key)
+        if prefix_year:
+            state["assigned_prefix_year_by_day"][teacher][str(day)].add(prefix_year)
+        if trust_for_propagation:
+            state["trusted_assigned_disc_by_day"][teacher][str(day)].add(disc)
+            if family_key:
+                state["trusted_assigned_family_by_day"][teacher][str(day)].add(family_key)
+            if prefix_year:
+                state["trusted_assigned_prefix_year_by_day"][teacher][str(day)].add(prefix_year)
         if kind:
             state["assigned_disc_kind"][teacher].add((disc, kind))
+            if group:
+                state["assigned_group_disc_kind"][teacher].add((group, disc, kind))
             if family_key:
                 state["assigned_family_disc_kind"][teacher].add((family_key, disc, kind))
             if prefix_year:
                 state["assigned_prefix_year_disc_kind"][teacher].add((prefix_year, disc, kind))
+            if trust_for_propagation:
+                state["trusted_assigned_disc_kind"][teacher].add((disc, kind))
+                if group:
+                    state["trusted_assigned_group_disc_kind"][teacher].add((group, disc, kind))
+                if family_key:
+                    state["trusted_assigned_family_disc_kind"][teacher].add((family_key, disc, kind))
+                if prefix_year:
+                    state["trusted_assigned_prefix_year_disc_kind"][teacher].add((prefix_year, disc, kind))
     state["assigned_count"][teacher] += 1
 
     event_key = (sk, *_stream_token(assignment))

@@ -262,6 +262,37 @@ def build_teacher_skills(run_atoms: pd.DataFrame) -> pd.DataFrame:
     return skills
 
 
+def build_teacher_discipline_capacity(run_atoms: pd.DataFrame) -> pd.DataFrame:
+    """Строит подтверждённую предметную ёмкость преподавателя по данным РУН."""
+    if run_atoms is None or len(run_atoms) == 0:
+        return pd.DataFrame(columns=[
+            "Преподаватель", "disc_key", "kind_norm", "confirmed_group_count",
+            "confirmed_prefix_count", "confirmed_family_count", "confirmed_capacity_units",
+            "confirmed_hours_kind",
+        ])
+
+    base = run_atoms.copy()
+    if "Учебная группа" not in base.columns:
+        return pd.DataFrame(columns=[
+            "Преподаватель", "disc_key", "kind_norm", "confirmed_group_count",
+            "confirmed_prefix_count", "confirmed_family_count", "confirmed_capacity_units",
+            "confirmed_hours_kind",
+        ])
+
+    gparts = base["Учебная группа"].astype(str).apply(extract_group_parts)
+    base["_group_prefix"] = gparts.apply(lambda x: x.get("group_prefix", ""))
+    base["_family_key"] = gparts.apply(lambda x: x.get("family_key", ""))
+
+    cap = base.groupby(["Преподаватель", "disc_key", "kind_norm"], as_index=False).agg(
+        confirmed_group_count=("Учебная группа", lambda s: len({str(x) for x in s if _txt(x)})),
+        confirmed_prefix_count=("_group_prefix", lambda s: len({str(x) for x in s if _txt(x)})),
+        confirmed_family_count=("_family_key", lambda s: len({str(x) for x in s if _txt(x)})),
+        confirmed_capacity_units=("capacity_units", "sum"),
+        confirmed_hours_kind=("hours_kind", "sum"),
+    )
+    return cap
+
+
 
 def build_teacher_group_links(run_atoms: pd.DataFrame) -> pd.DataFrame:
     """Строит связи преподавателя с группами, дисциплинами и видами занятий."""

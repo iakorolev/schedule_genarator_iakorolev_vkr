@@ -31,6 +31,41 @@ def clean_text(value: Any) -> str:
     return s.strip()
 
 
+
+
+WEEK_ALIASES = {
+    "Ч": "Ч",
+    "ЧИСЛ": "Ч",
+    "ЧИСЛИТЕЛЬ": "Ч",
+    "З": "З",
+    "ЗНАМ": "З",
+    "ЗНАМЕНАТЕЛЬ": "З",
+    "В": "В",
+    "ВЕРХ": "В",
+    "ВЕРХНЯЯ": "В",
+    "ВЕРХН": "В",
+    "Н": "Н",
+    "НИЖ": "Н",
+    "НИЖНЯЯ": "Н",
+    "НИЖН": "Н",
+    "ALL": "",
+    "ОБЕ": "",
+    "ОБЩ": "",
+}
+
+
+def normalize_week_type(value: Any) -> str:
+    """Нормализует признак недели к одному из значений: Ч, З, В, Н или пусто."""
+    s = clean_text(value).upper().replace('.', ' ')
+    if not s:
+        return ''
+    s = re.sub(r'\s+', ' ', s).strip()
+    if s in WEEK_ALIASES:
+        return WEEK_ALIASES[s]
+    for k, v in WEEK_ALIASES.items():
+        if s.startswith(k + ' '):
+            return v
+    return ''
 DAY_ALIASES = {
     "ПОНЕДЕЛЬНИК": "ПН",
     "ВТОРНИК": "ВТ",
@@ -125,8 +160,10 @@ def normalize_time(t: str) -> str:
 
 
 ROOM_PATTERNS = [
-    re.compile(r"ОРД-\d+[а-яa-z]?", re.I),
-    re.compile(r"ФОК-?\d+", re.I),
+    re.compile(r"(?:Орджоникидзе,\s*3\s*)?ОРД\s*-\s*\d+[а-яa-z]?", re.I),
+    re.compile(r"(?:Миклухо-Маклая,\s*6\s*)?ГК\s*-\s*\d+[а-яa-z]?", re.I),
+    re.compile(r"ФОК\s*-?\s*\d+", re.I),
+    re.compile(r"ДОТ\s+ДОТ\s*-\s*0+", re.I),
     re.compile(r"ТУИС", re.I),
     re.compile(r"дистанционно", re.I),
     re.compile(r"см\.\s*расписание[^;]*", re.I),
@@ -136,9 +173,13 @@ ROOM_PATTERNS = [
 def normalize_room(room: str) -> str:
     """Нормализует обозначение аудитории или дистанционного формата."""
     s = clean_text(room)
+    s = re.sub(r"ОРД\s*-\s*", "ОРД-", s, flags=re.I)
+    s = re.sub(r"ГК\s*-\s*", "ГК-", s, flags=re.I)
+    s = re.sub(r"ФОК\s*-\s*", "ФОК-", s, flags=re.I)
+    s = re.sub(r"ДОТ\s+ДОТ\s*-\s*0+", "дистанционно", s, flags=re.I)
     s = s.replace(" ;", ";").replace("; ", "; ")
-    s = s.replace("  ", " ")
-    return s
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
 
 
 def normalize_group(raw: str) -> str:
@@ -297,11 +338,13 @@ def find_rooms(text: str) -> list[str]:
 
 
 TEACHER_RE = re.compile(r"(?:доц\.|проф\.|ст\.преп\.|асс\.)?\s*[А-ЯЁ][а-яё-]+\s+[А-Я]\.[А-Я]\.", re.U)
+FULLNAME_TEACHER_RE = re.compile(r"\b[А-ЯЁA-Z][а-яёa-z]+(?:-[А-ЯЁA-Z]?[а-яёa-z]+)*(?:\s+[А-ЯЁA-Z][а-яёa-z]+(?:-[А-ЯЁA-Z]?[а-яёa-z]+)*){1,3}\b")
 
 
 def looks_like_teacher(text: str) -> bool:
     """Проверяет, похоже ли значение на ФИО преподавателя."""
-    return bool(TEACHER_RE.search(clean_text(text)))
+    s = clean_text(text)
+    return bool(TEACHER_RE.search(s) or FULLNAME_TEACHER_RE.search(s))
 
 
 def extract_teacher_hints(text: str) -> list[str]:
@@ -311,6 +354,12 @@ def extract_teacher_hints(text: str) -> list[str]:
     for m in TEACHER_RE.finditer(s):
         t = re.sub(r"\s+", " ", m.group(0)).strip()
         t = re.sub(r"^(?:доц\.|проф\.|ст\.преп\.|асс\.)\s*", "", t, flags=re.I)
+        if t and t.lower() != "преподаватель" and t not in out:
+            out.append(t)
+    if out:
+        return out
+    for m in FULLNAME_TEACHER_RE.finditer(s):
+        t = re.sub(r"\s+", " ", m.group(0)).strip()
         if t and t.lower() != "преподаватель" and t not in out:
             out.append(t)
     return out

@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 
-VALID_MODES = {"force_teacher", "lock_assignment", "prefer_teacher", "ban_teacher"}
+VALID_MODES = {"force_teacher", "lock_assignment", "prefer_teacher", "ban_teacher", "prefer_teacher_scope", "ban_teacher_scope"}
 
 
 
@@ -124,10 +124,16 @@ def _match_mask(df: pd.DataFrame, when: dict) -> pd.Series:
     mask = pd.Series(True, index=df.index)
     if when.get("group"):
         mask &= df["_g"].eq(when["group"])
+    if when.get("group_prefix") and "group_prefix" in df.columns:
+        mask &= df["group_prefix"].astype(str).eq(when["group_prefix"])
     if when.get("disc_key"):
         mask &= df["_d"].eq(when["disc_key"])
     if when.get("kind"):
         mask &= df["_k"].eq(when["kind"])
+    if when.get("day") and "День недели" in df.columns:
+        mask &= df["День недели"].astype(str).eq(when["day"])
+    if when.get("week_type") and "week_type" in df.columns:
+        mask &= df["week_type"].astype(str).eq(when["week_type"])
     return mask
 
 
@@ -144,8 +150,11 @@ def _normalize_rule(rule: dict) -> None:
 
     when2 = {
         "group": _clean(when.get("group")),
+        "group_prefix": _clean(when.get("group_prefix")),
         "disc_key": _clean(when.get("disc_key")),
         "kind": _clean(when.get("kind")),
+        "day": _clean(when.get("day")),
+        "week_type": _clean(when.get("week_type")),
     }
 
     assign2 = {

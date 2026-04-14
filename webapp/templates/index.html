@@ -12,6 +12,7 @@
 
     <div class="card">
       <div class="row">
+        <button type="button" data-back-fallback="/">назад</button>
         <button id="btnNew">новая сессия</button>
         <div class="muted" id="status"></div>
       </div>
@@ -29,9 +30,22 @@
       </div>
 
       <div class="row">
+        <label class="lbl">эталон (xlsx)</label>
+        <input type="file" id="fileRef" accept=".xlsx">
+        <button id="btnUploadRef">загрузить</button>
+      </div>
+
+      <div class="row">
         <button id="btnBuild">построить черновик</button>
+        <button id="btnApplySuggestions">применить рекомендации</button>
+        <button id="btnApplySuggestionsRebuild">применить и пересобрать</button>
+        <a class="link" href="/run-editor">редактор рун</a>
         <a class="link" href="/unmatched">перейти к unmatched</a>
         <a class="link" href="/download/timetable">скачать итог</a>
+        <a class="link" href="/download/run-edited">скачать run_edited</a>
+        <a class="link" href="/download/rule-suggestions">рекомендации</a>
+        <a class="link" href="/download/accepted-suggestions">принятые рекомендации</a>
+        <a class="link" href="/download/compare-summary">сводка сравнения</a>
       </div>
 
       <pre class="log" id="log"></pre>
@@ -39,5 +53,6 @@
   </div>
 
   <script src="/static/index.js"></script>
+  <script src="/static/nav.js"></script>
 </body>
 </html>

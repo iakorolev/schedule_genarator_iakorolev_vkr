@@ -6,14 +6,17 @@ from pathlib import Path
 
 import pandas as pd
 
-from .allocation import build_slot_candidates, allocate_unmatched_greedy, merge_locked_and_allocated
+from .allocation import build_slot_candidates, allocate_unmatched_greedy, allocate_unmatched_safe_recovery, merge_locked_and_allocated
 from .export import build_teacher_timetable
 from .load_model import build_teacher_state
 from .mappings import apply_mappings, load_mappings
 from .matching import lock_teacher_hints, merge_schedule_with_teachers, select_locked_exact_matches
-from .sched_parser import read_schedule_atoms
+from .math_methods import build_teacher_competency_matrix, build_teacher_competency_pivot
+from .sched_parser import read_schedule_atoms, read_schedule_atoms_multi
 from .un_parser import build_teacher_capacity, read_un, read_un_atoms
-
+from .reference_compare import compare_teacher_timetables
+from .quality_diagnostics import build_quality_diagnostics
+from .rule_suggestions import build_rule_suggestions
 
 from .normalize import _txt, best_disc_match, teacher_lastname, extract_group_parts
 
@@ -155,19 +158,26 @@ def _safe_to_excel(df: pd.DataFrame, path: Path) -> None:
 
 
 
-def build_timetable_bundle(run_path: Path, sched_path: Path, out_dir: Path, mappings_path: Path) -> dict:
+def build_timetable_bundle(run_path: Path, sched_path: Path | list[Path] | tuple[Path, ...], out_dir: Path, mappings_path: Path, reference_path: Path | None = None) -> dict:
     """Выполняет полный конвейер построения преподавательского расписания."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     run_path = Path(run_path)
-    sched_path = Path(sched_path)
+    if isinstance(sched_path, (list, tuple, set)):
+        sched_paths = [Path(p) for p in sched_path if p]
+    else:
+        sched_paths = [Path(sched_path)]
     mappings_path = Path(mappings_path)
+    reference_path = Path(reference_path) if reference_path else None
 
     # 1) парсинг исходников
     un_raw, un_expanded = read_un(run_path)
     run_atoms_base = read_un_atoms(run_path)
-    sched_parsed, sched_norm_all, sched_atoms = read_schedule_atoms(sched_path)
+    if len(sched_paths) == 1:
+        sched_parsed, sched_norm_all, sched_atoms = read_schedule_atoms(sched_paths[0])
+    else:
+        sched_parsed, sched_norm_all, sched_atoms = read_schedule_atoms_multi(sched_paths)
 
     mappings = load_mappings(mappings_path)
     sched_norm, external_slots = _filter_department_slots(sched_norm_all, run_atoms_base, mappings)
@@ -207,8 +217,18 @@ def build_timetable_bundle(run_path: Path, sched_path: Path, out_dir: Path, mapp
     # 3) дораспределение unmatched
     unmatched_slots = final_pre[final_pre["Преподаватель"].isna()].copy()
     candidates = build_slot_candidates(unmatched_slots, run_atoms, teacher_state, locked_after_manual, mappings=mappings)
-    allocated = allocate_unmatched_greedy(unmatched_slots, candidates, teacher_state)
+    allocated_primary = allocate_unmatched_greedy(unmatched_slots, candidates, teacher_state)
 
+    interim_assignments = merge_locked_and_allocated(final_pre, locked_after_manual, allocated_primary)
+    remaining_slots = interim_assignments[interim_assignments["Преподаватель"].isna()].copy()
+    if len(remaining_slots) > 0:
+        recovery_candidates = build_slot_candidates(remaining_slots, run_atoms, teacher_state, interim_assignments[interim_assignments["Преподаватель"].notna()].copy(), mappings=mappings)
+        allocated_recovery = allocate_unmatched_safe_recovery(remaining_slots, recovery_candidates, teacher_state)
+    else:
+        recovery_candidates = pd.DataFrame()
+        allocated_recovery = pd.DataFrame()
+
+    allocated = pd.concat([allocated_primary, allocated_recovery], ignore_index=True) if (len(allocated_primary) or len(allocated_recovery)) else pd.DataFrame()
     final_assignments = merge_locked_and_allocated(final_pre, locked_after_manual, allocated)
 
     # 4) диагностический старый merge оставим для сравнения
@@ -229,8 +249,11 @@ def build_timetable_bundle(run_path: Path, sched_path: Path, out_dir: Path, mapp
     run_atoms_path = out_dir / "run_atoms.xlsx"
     locked_path = out_dir / "locked_assignments.xlsx"
     allocated_path = out_dir / "allocated_assignments.xlsx"
+    recovery_candidates_path = out_dir / "recovery_candidate_scores.xlsx"
     candidates_path = out_dir / "candidate_scores.xlsx"
     teacher_load_path = out_dir / "teacher_load_summary.xlsx"
+    competency_matrix_path = out_dir / "teacher_competency_matrix.xlsx"
+    competency_pivot_path = out_dir / "teacher_competency_pivot.xlsx"
     legacy_path = out_dir / "legacy_schedule_with_teachers.xlsx"
 
     _safe_to_excel(un_raw, un_raw_path)
@@ -243,6 +266,9 @@ def build_timetable_bundle(run_path: Path, sched_path: Path, out_dir: Path, mapp
     _safe_to_excel(locked_after_manual, locked_path)
     _safe_to_excel(allocated, allocated_path)
     _safe_to_excel(candidates, candidates_path)
+    _safe_to_excel(recovery_candidates, recovery_candidates_path)
+    _safe_to_excel(build_teacher_competency_matrix(run_atoms), competency_matrix_path)
+    _safe_to_excel(build_teacher_competency_pivot(run_atoms), competency_pivot_path)
     _safe_to_excel(legacy_merged, legacy_path)
     _safe_to_excel(final_assignments, schedule_with_teachers)
 
@@ -289,6 +315,22 @@ def build_timetable_bundle(run_path: Path, sched_path: Path, out_dir: Path, mapp
     elif conflicts_path.exists():
         conflicts_path.unlink(missing_ok=True)
 
+    quality_result = build_quality_diagnostics(
+        final_assignments=final_assignments,
+        candidates=candidates,
+        teacher_capacity=teacher_capacity,
+        out_dir=out_dir,
+    )
+    rule_result = build_rule_suggestions(
+        final_assignments=final_assignments,
+        candidates=candidates,
+        out_dir=out_dir,
+    )
+
+    compare_result = None
+    if reference_path and reference_path.exists() and timetable_by_teachers.exists():
+        compare_result = compare_teacher_timetables(reference_path=reference_path, generated_path=timetable_by_teachers, out_dir=out_dir)
+
     total = int(len(final_assignments))
     external_n = int(len(external_slots))
     matched = int(final_assignments["Преподаватель"].notna().sum()) if "Преподаватель" in final_assignments.columns else 0
@@ -297,26 +339,42 @@ def build_timetable_bundle(run_path: Path, sched_path: Path, out_dir: Path, mapp
     conflicts_n = int(len(conflicts)) if isinstance(conflicts, pd.DataFrame) else 0
     locked_n = int((final_assignments["assign_type"].fillna("").isin(["locked_teacher_hint", "locked_exact", "manual_force"]).sum()))
     auto_n = int((final_assignments["assign_type"] == "auto_allocated").sum())
+    recovered_n = int((final_assignments["assign_type"] == "auto_recovered").sum())
+
+    stats = {
+        "total_slots": total,
+        "matched": matched,
+        "unmatched": unmatched_n,
+        "lowconf": lowconf_n,
+        "conflicts": conflicts_n,
+        "locked": locked_n,
+        "auto_allocated": auto_n,
+        "auto_recovered": recovered_n,
+        "external_excluded": external_n,
+    }
+    files = {
+        "out": str(timetable_by_teachers),
+        "unmatched": str(unmatched_slots_path),
+        "un_expanded": str(un_expanded_path),
+        "schedule_with_teachers": str(schedule_with_teachers),
+        "schedule_atoms": str(schedule_atoms_path),
+        "run_atoms": str(run_atoms_path),
+        "teacher_loads": str(teacher_load_path),
+        "competency_matrix": str(competency_matrix_path),
+        "competency_pivot": str(competency_pivot_path),
+        "external_slots": str(external_slots_path),
+    }
+    if quality_result:
+        stats.update(quality_result.get("summary", {}))
+        files.update(quality_result.get("files", {}))
+    if rule_result:
+        stats.update(rule_result.get("summary", {}))
+        files.update(rule_result.get("files", {}))
+    if compare_result:
+        stats.update({f"compare_{k}": v for k, v in compare_result.get("summary", {}).items()})
+        files.update(compare_result.get("files", {}))
 
     return {
-        "stats": {
-            "total_slots": total,
-            "matched": matched,
-            "unmatched": unmatched_n,
-            "lowconf": lowconf_n,
-            "conflicts": conflicts_n,
-            "locked": locked_n,
-            "auto_allocated": auto_n,
-            "external_excluded": external_n,
-        },
-        "files": {
-            "out": str(timetable_by_teachers),
-            "unmatched": str(unmatched_slots_path),
-            "un_expanded": str(un_expanded_path),
-            "schedule_with_teachers": str(schedule_with_teachers),
-            "schedule_atoms": str(schedule_atoms_path),
-            "run_atoms": str(run_atoms_path),
-            "teacher_loads": str(teacher_load_path),
-            "external_slots": str(external_slots_path),
-        },
+        "stats": stats,
+        "files": files,
     }

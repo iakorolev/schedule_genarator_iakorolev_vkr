@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>редактор рун</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <h1>редактор рун — overlay поверх исходного файла</h1>
+      <div class="actions">
+        <button type="button" data-back-fallback="/">назад</button>
+        <a class="link" href="/">загрузка</a>
+        <a class="link" href="/unmatched">unmatched</a>
+        <a class="link" href="/download/run-edited">скачать run_edited</a>
+        <button id="btnReload">обновить</button>
+        <button id="btnRevertAll">сбросить все правки</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label class="lbl">поиск</label>
+        <input class="txt" type="text" id="filterQuery" placeholder="преподаватель, группа, дисциплина...">
+        <label class="chk"><input type="checkbox" id="filterChangedOnly"> только изменённые</label>
+        <button id="btnApplyFilter">применить фильтр</button>
+        <div class="muted" id="status"></div>
+        <div class="muted">можно редактировать строку, удалять занятие из rebuild, восстанавливать его обратно и добавлять новые строки с новым преподавателем</div>
+      </div>
+
+      <div class="new-row-panel">
+        <div class="new-row-head">
+          <strong>новая строка рун</strong>
+          <div class="muted">заполните основные поля и нажмите «добавить строку». нового преподавателя можно ввести вручную.</div>
+          <div class="muted" id="newRowHint">подсказки загружаются...</div>
+        </div>
+        <div class="new-row-form" id="newRowForm"></div>
+        <div class="actions">
+          <button id="btnAddRow">добавить строку</button>
+          <button id="btnResetNewRow">очистить форму</button>
+        </div>
+      </div>
+
+      <div class="grid run-grid">
+        <table>
+          <thead>
+            <tr>
+              <th>excel row</th>
+              <th>преподаватель</th>
+              <th>дисциплина</th>
+              <th>вид</th>
+              <th>код группы</th>
+              <th>номер группы</th>
+              <th>кафедра</th>
+              <th>семестр</th>
+              <th>лек</th>
+              <th>пр</th>
+              <th>лаб</th>
+              <th>всего</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div id="suggestionsHost" class="suggestions-host" aria-hidden="true"></div>
+      <pre class="log" id="log"></pre>
+    </div>
+  </div>
+
+  <script src="/static/run_editor.js"></script>
+  <script src="/static/nav.js"></script>
+</body>
+</html>
